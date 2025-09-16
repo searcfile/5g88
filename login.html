@@ -35,7 +35,6 @@
 
     document.getElementById('loginFacebook').onclick = async () => {
       const prov = new firebase.auth.FacebookAuthProvider();
-      // Pastikan Facebook auth di-enable & OAuth redirect URL sudah diset di Facebook App
       await auth.signInWithPopup(prov);
       location.href = 'index.html';
     };
