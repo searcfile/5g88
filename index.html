@@ -1,1 +1,122 @@
-aa
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>5G88 Video</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Topbar -->
+  <nav class="topbar">
+    <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
+    <div class="brand">5G88 <span>Video</span></div>
+    <div id="userBadge" class="user-badge"></div>
+  </nav>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar" aria-label="Sidebar">
+    <div class="profile">
+      <div id="avatar" class="avatar"></div>
+      <div>
+        <div id="username" class="name">(profile) [nama]</div>
+        <div id="userEmail" class="email"></div>
+      </div>
+    </div>
+
+    <a href="#" data-nav="home" class="nav-item active">🏠 Home</a>
+    <a href="#" data-nav="watchHistory" class="nav-item">🕒 History Nonton</a>
+    <a href="#" data-nav="searchHistory" class="nav-item">🔎 History Pencarian</a>
+    <a href="#" data-nav="newVideos" class="nav-item">✨ New Videos</a>
+
+    <!-- Admin-only -->
+    <button id="adminAddBtn" class="btn w-full mt16 hidden">＋ Add Video (Admin)</button>
+
+    <a href="#" id="logoutBtn" class="nav-item logout">🚪 Logout</a>
+  </aside>
+
+  <!-- Content -->
+  <main class="container">
+    <div class="row gap10">
+      <div class="grow search-row">
+        <input id="searchInput" placeholder="Cari judul video..." aria-label="Search videos">
+      </div>
+
+      <div class="lang-switch">
+        <button id="langBtn" class="icon-btn" aria-expanded="false">🌐</button>
+        <div id="langMenu" class="lang-menu" role="menu">
+          <button data-lang="en">ENGLISH</button>
+          <button data-lang="zh">CHINESE</button>
+          <button data-lang="ms">MALAYSIAN</button>
+          <button data-lang="id">INDONESIA</button>
+          <button data-lang="vi">VIETNAM</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player Card -->
+    <section class="player-card">
+      <h3 id="videoTitle" class="video-title">Loading…</h3>
+      <video id="player" controls playsinline></video>
+
+      <div class="controls">
+        <button class="btn" data-skip="-600">&lt;10M</button>
+        <button class="btn" data-skip="-60">&lt;1M</button>
+        <button class="btn" data-skip="-10">&lt;10S</button>
+        <button class="btn" data-skip="10">10S&gt;</button>
+        <button class="btn" data-skip="60">1M&gt;</button>
+        <button class="btn" data-skip="600">10M&gt;</button>
+      </div>
+
+      <div class="actions">
+        <button id="likeBtn" class="chip">👍 <span id="likeCount">0</span></button>
+        <button id="dislikeBtn" class="chip">👎 <span id="dislikeCount">0</span></button>
+        <button id="shareBtn" class="chip">🔗 Share</button>
+        <button id="fsBtn" class="chip">⛶ Fullscreen</button>
+      </div>
+    </section>
+
+    <!-- List -->
+    <section>
+      <ul id="videoList" class="video-list" aria-live="polite"></ul>
+    </section>
+
+    <!-- Simple pages -->
+    <section id="historyWrap" class="hidden">
+      <h3>History Nonton</h3>
+      <ul id="watchHistory" class="simple-list"></ul>
+      <h3>History Pencarian</h3>
+      <ul id="searchHistory" class="simple-list"></ul>
+    </section>
+  </main>
+
+  <!-- Admin Add Modal -->
+  <dialog id="addModal" class="dialog">
+    <form method="dialog" class="dialog-card">
+      <h3>Add Video (Admin)</h3>
+      <label>Judul
+        <input id="m_title" required>
+      </label>
+      <label>Video URL (mp4 / HLS)
+        <input id="m_src" required placeholder="https://.../video.mp4">
+      </label>
+      <label>Intro 30s (opsional)
+        <input id="m_intro" placeholder="https://.../intro.mp4">
+      </label>
+      <div class="row gap10 mt12">
+        <button id="m_save" class="btn grow" value="save">Save</button>
+        <button class="btn ghost" value="cancel">Cancel</button>
+      </div>
+      <small>Nota: Simpanan ke Firebase Realtime Database → <code>/videos</code></small>
+    </form>
+  </dialog>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="firebase.js"></script>
+  <!-- App -->
+  <script src="script.js"></script>
+</body>
+</html>
