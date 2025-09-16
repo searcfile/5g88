@@ -14,6 +14,20 @@
     <button id="loginGoogle" class="btn wide google">Login dengan Google</button>
     <button id="loginFacebook" class="btn wide facebook">Login dengan Facebook</button>
 
+    <div style="margin:10px 0;opacity:.8">— atau —</div>
+
+    <button id="showAdmin" class="btn wide ghost">Login Admin (username & password)</button>
+    <div id="adminForm" class="hidden" style="margin-top:10px;text-align:left">
+      <label>Username
+        <input id="adminUser" placeholder="contoh: admin">
+      </label>
+      <label>Password
+        <input id="adminPass" type="password" placeholder="••••••••">
+      </label>
+      <small class="muted">Username ini akan dipetakan ke email <code>@5g88.local</code></small>
+      <button id="adminLogin" class="btn wide" style="margin-top:8px">Login Admin</button>
+    </div>
+
     <small class="muted">Anda akan diarahkan ke halaman utama setelah login.</small>
   </div>
 
@@ -23,8 +37,8 @@
   <script src="firebase.js"></script>
   <script>
     const auth = firebase.auth();
+    const ADMIN_DOMAIN = '5g88.local'; // email = <username>@5g88.local
 
-    // Jika sudah login → ke index
     auth.onAuthStateChanged(u => { if (u) location.href = 'index.html'; });
 
     document.getElementById('loginGoogle').onclick = async () => {
@@ -32,11 +46,27 @@
       await auth.signInWithPopup(prov);
       location.href = 'index.html';
     };
-
     document.getElementById('loginFacebook').onclick = async () => {
       const prov = new firebase.auth.FacebookAuthProvider();
       await auth.signInWithPopup(prov);
       location.href = 'index.html';
+    };
+
+    document.getElementById('showAdmin').onclick = ()=> {
+      document.getElementById('adminForm').classList.toggle('hidden');
+    };
+    document.getElementById('adminLogin').onclick = async ()=> {
+      const u = document.getElementById('adminUser').value.trim();
+      const p = document.getElementById('adminPass').value;
+      if(!u || !p) return alert('Isi username & password');
+      const email = `${u}@${ADMIN_DOMAIN}`;
+      try{
+        await auth.signInWithEmailAndPassword(email, p);
+        location.href = 'index.html';
+      }catch(e){
+        alert('Login admin gagal. Pastikan akun admin sudah dibuat di Firebase Authentication dengan email: ' + email);
+        console.error(e);
+      }
     };
   </script>
 </body>
