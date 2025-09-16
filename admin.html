@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin • 5G88 Video</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .admin-wrap{max-width:1100px;margin:18px auto;padding:0 16px}
+    .table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    .table th,.table td{padding:10px 12px;background:#1b1323;border:1px solid #2a2130}
+    .table th{background:#201728}
+    .table tr td:first-child,.table tr th:first-child{border-radius:12px 0 0 12px}
+    .table tr td:last-child,.table tr th:last-child{border-radius:0 12px 12px 0}
+    .tools{display:flex;gap:8px;flex-wrap:wrap}
+    .pill{display:inline-block;padding:2px 8px;border:1px solid #2a2130;border-radius:999px;background:#241a2c;font-size:12px}
+  </style>
+</head>
+<body>
+  <nav class="topbar">
+    <a href="index.html" class="icon-btn" aria-label="Back">←</a>
+    <div class="brand">5G88 <span>Admin</span></div>
+    <div class="top-right">
+      <a href="#" id="logoutBtn" class="icon-btn">🚪</a>
+    </div>
+  </nav>
+
+  <main class="admin-wrap">
+    <h2 style="margin:8px 0 12px;color:#ffd6eb">Dashboard</h2>
+
+    <section class="player-card">
+      <h3>Upload Video</h3>
+      <div class="row gap10">
+        <input id="title" placeholder="Judul video" class="grow">
+        <input id="url" placeholder="URL video (opsional)">
+        <input id="urlIntro" placeholder="URL intro 30s (opsional)">
+      </div>
+      <div class="row gap10 mt12">
+        <input id="fileMain" type="file" accept="video/*">
+        <input id="fileIntro" type="file" accept="video/*">
+        <button id="btnUpload" class="btn">Upload</button>
+      </div>
+      <progress id="prog" value="0" max="100" style="width:100%;display:none" ></progress>
+    </section>
+
+    <section class="mt16">
+      <div class="row gap10">
+        <input id="vidSearch" placeholder="Cari judul video…" class="grow">
+        <button id="btnRefresh" class="icon-btn">⟳</button>
+      </div>
+      <div class="mt12" id="videosCount"></div>
+      <table class="table" id="videosTable">
+        <thead>
+          <tr><th>Judul</th><th>Created</th><th>Source</th><th>Aksi</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="mt16">
+      <h3>Users</h3>
+      <table class="table" id="usersTable">
+        <thead>
+          <tr><th>Nama</th><th>Email</th><th>Provider</th><th>Last Login</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+  <script src="firebase.js"></script>
+
+  <script>
+  const ADMIN_EMAIL = 'admin@5g88.local';
+  const auth = firebase.auth();
+  const db = firebase.database();
+  const storage = firebase.storage();
+
+  // guard: hanya admin
+  auth.onAuthStateChanged(u=>{
+    if(!u) { location.href='login.html'; return; }
+    if(u.email !== ADMIN_EMAIL){ alert('Admin only'); location.href='index.html'; }
+  });
+
+  document.getElementById('logoutBtn').onclick = async (e)=>{ e.preventDefault(); try{await auth.signOut()}catch{} location.href='login.html'; };
+
+  // upload
+  function uploadFileTo(path, file, onProgress){
+    return new Promise((resolve,reject)=>{
+      const ref = storage.ref().child(path);
+      const task = ref.put(file);
+      task.on('state_changed', s=> onProgress?.(Math.round(100*s.bytesTransferred/s.totalBytes)), reject, async ()=>resolve(await ref.getDownloadURL()));
+    });
+  }
+  document.getElementById('btnUpload').onclick = async ()=>{
+    const title = document.getElementById('title').value.trim();
+    const url = document.getElementById('url').value.trim();
+    const urlIntro = document.getElementById('urlIntro').value.trim();
+    const f1 = document.getElementById('fileMain').files[0];
+    const f2 = document.getElementById('fileIntro').files[0];
+    const prog = document.getElementById('prog');
+    if(!title) return alert('Judul wajib diisi');
+    if(!url && !f1) return alert('Isi URL video atau upload file');
+
+    try{
+      prog.style.display='block'; prog.value=0;
+      const key = db.ref('videos').push().key;
+      let finalMain = url, finalIntro = urlIntro;
+      if(f1) finalMain = await uploadFileTo(`videos/${key}/main_${Date.now()}_${f1.name}`, f1, p=>prog.value=p);
+      if(f2) finalIntro = await uploadFileTo(`videos/${key}/intro_${Date.now()}_${f2.name}`, f2, p=>prog.value=p);
+      await db.ref('videos/'+key).set({ id:key, title, src:finalMain, intro:finalIntro||null, createdAt:Date.now() });
+      prog.style.display='none';
+      document.getElementById('title').value = '';
+      document.getElementById('url').value = '';
+      document.getElementById('urlIntro').value = '';
+      document.getElementById('fileMain').value = '';
+      document.getElementById('fileIntro').value = '';
+      loadVideos();
+    }catch(e){ console.error(e); alert('Upload gagal'); prog.style.display='none'; }
+  };
+
+  // videos table
+  async function loadVideos(){
+    const snap = await db.ref('videos').get();
+    const val = snap.val() || {};
+    const arr = Object.values(val).sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+    renderVideos(arr);
+  }
+  function renderVideos(arr){
+    const q = document.getElementById('vidSearch').value.trim().toLowerCase();
+    const data = arr.filter(v=> v.title.toLowerCase().includes(q));
+    document.getElementById('videosCount').innerHTML = `<span class="pill">${data.length} video(s)</span>`;
+    const tbody = document.querySelector('#videosTable tbody');
+    tbody.innerHTML = data.map(v=>{
+      const created = v.createdAt ? new Date(v.createdAt).toLocaleString() : '-';
+      return `<tr>
+        <td>${v.title}</td>
+        <td>${created}</td>
+        <td style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.src}</td>
+        <td class="tools">
+          <a class="btn" href="index.html?v=${encodeURIComponent(v.id)}" target="_blank">Play</a>
+          <button class="btn ghost" data-act="edit" data-id="${v.id}">Edit</button>
+          <button class="btn" data-act="delete" data-id="${v.id}">Delete</button>
+        </td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="4" style="text-align:center;opacity:.7">No data</td></tr>`;
+  }
+  document.getElementById('vidSearch').oninput = loadVideos;
+  document.getElementById('btnRefresh').onclick = loadVideos;
+  document.querySelector('#videosTable').onclick = async (e)=>{
+    const btn = e.target.closest('button'); if(!btn) return;
+    const id = btn.dataset.id, act = btn.dataset.act;
+    const snap = await db.ref('videos/'+id).get();
+    const v = snap.val(); if(!v) return;
+
+    if(act==='delete'){
+      if(!confirm('Hapus video ini?')) return;
+      await db.ref('videos/'+id).remove();
+      loadVideos();
+    } else if (act==='edit'){
+      const newTitle = prompt('Judul:', v.title) ?? v.title;
+      const newSrc   = prompt('URL video:', v.src) ?? v.src;
+      const newIntro = prompt('URL intro (opsional):', v.intro||'') || null;
+      await db.ref('videos/'+id).update({ title:newTitle, src:newSrc, intro:newIntro });
+      loadVideos();
+    }
+  };
+
+  // users table
+  async function loadUsers(){
+    const snap = await db.ref('users').get();
+    const val = snap.val() || {};
+    const arr = Object.values(val).sort((a,b)=> (b.lastLoginAt||0)-(a.lastLoginAt||0));
+    const tbody = document.querySelector('#usersTable tbody');
+    tbody.innerHTML = arr.map(u=>{
+      return `<tr>
+        <td>${u.displayName||'-'}</td>
+        <td>${u.email||'-'}</td>
+        <td>${u.providerId||'-'}</td>
+        <td>${u.lastLoginAt? new Date(u.lastLoginAt).toLocaleString() : '-'}</td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="4" style="text-align:center;opacity:.7">No data</td></tr>`;
+  }
+
+  loadVideos(); loadUsers();
+  </script>
+</body>
+</html>
