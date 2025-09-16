@@ -1,1 +1,11 @@
-
+[
+  {
+    "title": "Big Buck Bunny (Demo)",
+    "src": "https://www.w3schools.com/html/mov_bbb.mp4",
+    "intro": "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+  },
+  {
+    "title": "Sintel Trailer (Demo)",
+    "src": "https://media.w3.org/2010/05/sintel/trailer.mp4"
+  }
+]
