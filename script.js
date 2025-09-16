@@ -3,9 +3,9 @@ const ADMIN_EMAIL = 'admin@gmail.com'; // ganti email admin kau
 /* =========================== */
 
 // helpers
-const $ = s => document.querySelector(s);
+const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const db = firebase.database();
+const db   = firebase.database();
 const auth = firebase.auth();
 
 const player = $('#player');
@@ -20,10 +20,48 @@ let videos = [];
 let current = null;
 let dblCount = 0, dblTimer;
 
+/* ======= I18N sederhana ======= */
+const I18N = {
+  en:{home:'Home',watchHistory:'Watch History',searchHistory:'Search History',newVideos:'New Videos',logout:'Logout',searchPlaceholder:'Search video title…',share:'Share',fullscreen:'Fullscreen'},
+  zh:{home:'首页',watchHistory:'观看历史',searchHistory:'搜索历史',newVideos:'新视频',logout:'退出登录',searchPlaceholder:'搜索视频标题…',share:'分享',fullscreen:'全屏'},
+  ms:{home:'Home',watchHistory:'Sejarah Tonton',searchHistory:'Sejarah Carian',newVideos:'Video Baharu',logout:'Log Keluar',searchPlaceholder:'Cari tajuk video…',share:'Kongsi',fullscreen:'Skrin Penuh'},
+  id:{home:'Beranda',watchHistory:'Riwayat Nonton',searchHistory:'Riwayat Pencarian',newVideos:'Video Baru',logout:'Keluar',searchPlaceholder:'Cari judul video…',share:'Bagikan',fullscreen:'Layar Penuh'},
+  vi:{home:'Trang chủ',watchHistory:'Lịch sử xem',searchHistory:'Lịch sử tìm kiếm',newVideos:'Video mới',logout:'Đăng xuất',searchPlaceholder:'Tìm tiêu đề video…',share:'Chia sẻ',fullscreen:'Toàn màn hình'}
+};
+function applyLang(lang){
+  const dict = I18N[lang] || I18N.en;
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const key = el.getAttribute('data-i18n');
+    if (!key || !dict[key]) return;
+    const emoji = (el.textContent.trim().match(/^[^\w\s]/)?.[0] || '');
+    el.textContent = (emoji ? `${emoji} ` : '') + dict[key];
+  });
+  const si = document.querySelector('[data-i18n-placeholder="searchPlaceholder"]');
+  if (si && dict.searchPlaceholder) si.placeholder = dict.searchPlaceholder;
+  const sb = $('#shareBtn'); if (sb) sb.textContent = `🔗 ${dict.share}`;
+  const fb = $('#fsBtn');    if (fb) fb.textContent = `⛶ ${dict.fullscreen}`;
+}
+const SAVED_LANG = localStorage.getItem('lang') || 'id';
+applyLang(SAVED_LANG);
+
 // UI init
-$('#menuBtn').onclick = () => $('#sidebar').classList.toggle('open');
-$('#langBtn').onclick = () => $('.lang-switch').classList.toggle('open');
-$('#logoutBtn').onclick = async (e)=>{ e.preventDefault(); await auth.signOut(); location.href = 'login.html'; };
+$('#menuBtn').onclick = () => {
+  $('#sidebar').classList.toggle('open');
+  document.body.classList.toggle('sidebar-open'); // geser konten saat sidebar buka (desktop)
+};
+
+const langWrap = $('#langSwitch');
+$('#langBtn').onclick = () => langWrap.classList.toggle('open');
+$$('#langMenu button').forEach(b=>{
+  b.onclick = ()=>{ localStorage.setItem('lang', b.dataset.lang); applyLang(b.dataset.lang); langWrap.classList.remove('open'); };
+});
+
+// Logout: redirect pakai replace biar tak balik ke index via back
+$('#logoutBtn').addEventListener('click', async (e)=>{
+  e.preventDefault();
+  try { await auth.signOut(); } catch (err) { console.error('signOut error', err); }
+  window.location.replace('login.html');
+});
 
 $('#adminAddBtn').onclick = () => $('#addModal').showModal();
 $('#m_save').onclick = async (e) => {
@@ -54,11 +92,6 @@ $$('.nav-item').forEach(a=>{
       renderHistories();
     }
   };
-});
-
-// language choose
-$$('#langMenu button').forEach(b=>{
-  b.onclick = ()=>{ localStorage.setItem('lang', b.dataset.lang); $('.lang-switch').classList.remove('open'); };
 });
 
 // skip buttons
@@ -131,30 +164,45 @@ auth.onAuthStateChanged(async (u)=>{
   // admin button
   if (u.email === ADMIN_EMAIL) $('#adminAddBtn').classList.remove('hidden');
 
+  console.log('[app] auth ok, load videos…');
+
   // load videos from Firebase, fallback to json
   db.ref('videos').on('value', async snap => {
-    const val = snap.val();
-    if (val) {
-      videos = Object.values(val).sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-      renderList('');
-      if (!current && videos[0]) loadVideo(videos[0]);
-    } else {
-      // fallback: seed from video-data.json (first run)
-      const seed = await fetch('video-data.json').then(r=>r.json()).catch(()=>[]);
-      videos = seed.map((v,i)=> ({ id: `seed-${i}`, title:v.title, src:v.src, intro:v.intro||null, createdAt:Date.now()-i*1000 }));
-      renderList('');
-      if (!current && videos[0]) loadVideo(videos[0]);
+    try{
+      const val = snap.val();
+      if (val) {
+        videos = Object.values(val).sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+        console.log('[videos] RTDB:', videos.length);
+        renderList('');
+        if (!current && videos[0]) loadVideo(videos[0]);
+      } else {
+        console.warn('[videos] RTDB empty, fallback JSON');
+        await loadFromJson();
+      }
+    }catch(err){
+      console.error('[videos] RTDB handler error', err);
+      await loadFromJson();
     }
   });
 
   // pick by URL ?v=id
   const params = new URLSearchParams(location.search);
   const vidParam = params.get('v');
-  if (vidParam) {
-    // will be loaded once list ready; keep it
-    window.__pendingVidId = vidParam;
-  }
+  if (vidParam) window.__pendingVidId = vidParam;
 });
+
+async function loadFromJson(){
+  try{
+    const seed = await fetch('video-data.json', {cache:'no-store'}).then(r=>r.json());
+    videos = seed.map((v,i)=> ({ id: `seed-${i}`, title:v.title, src:v.src, intro:v.intro||null, createdAt:Date.now()-i*1000 }));
+    console.log('[videos] JSON:', videos.length);
+    renderList('');
+    if (!current && videos[0]) loadVideo(videos[0]);
+  }catch(e){
+    console.error('[videos] loadFromJson failed', e);
+    alert('Gagal memuat daftar video. Periksa video-data.json & console.');
+  }
+}
 
 // render list
 function renderList(filter=''){
@@ -180,13 +228,14 @@ function renderList(filter=''){
 function loadVideo(v){
   current = v;
   videoTitle.textContent = v.title;
-  // if intro: play intro up to 30s then swap to main
+  console.log('[player] load', v);
+
   if (v.intro) {
     player.src = v.intro;
-    player.play().catch(()=>{});
+    player.play().catch(err=>console.warn('[player] intro play err:', err));
     const onEnded = ()=>{
       player.removeEventListener('ended', onEnded);
-      player.src = v.src; player.play().catch(()=>{});
+      player.src = v.src; player.play().catch(err=>console.warn('[player] main play err:', err));
     };
     const guard = setInterval(()=>{
       if (player.currentTime >= 30) { clearInterval(guard); onEnded(); }
@@ -194,9 +243,8 @@ function loadVideo(v){
     player.addEventListener('ended', onEnded);
   } else {
     player.src = v.src;
-    player.play().catch(()=>{});
+    player.play().catch(err=>console.warn('[player] play err:', err));
   }
-  // update reaction counts
   updateReactionsUI(v.id);
 }
 
@@ -205,10 +253,8 @@ async function updateReactionsUI(id){
   const snap = await db.ref(`reactions/${id}`).get();
   const val = snap.val() || {};
   const arr = Object.values(val);
-  const likes = arr.filter(x=>x==='like').length;
-  const dislikes = arr.filter(x=>x==='dislike').length;
-  $('#likeCount').textContent = likes;
-  $('#dislikeCount').textContent = dislikes;
+  $('#likeCount').textContent = arr.filter(x=>x==='like').length;
+  $('#dislikeCount').textContent = arr.filter(x=>x==='dislike').length;
 }
 
 /* ===== Histories (localStorage) ===== */
