@@ -11,7 +11,21 @@
   <nav class="topbar">
     <button id="menuBtn" class="icon-btn" aria-label="Menu">☰</button>
     <div class="brand">5G88 <span>Video</span></div>
-    <div id="userBadge" class="user-badge"></div>
+
+    <!-- kanan atas -->
+    <div class="top-right">
+      <div class="lang-switch" id="langSwitch">
+        <button id="langBtn" class="icon-btn" aria-expanded="false">🌐</button>
+        <div id="langMenu" class="lang-menu" role="menu">
+          <button data-lang="en">ENGLISH</button>
+          <button data-lang="zh">CHINESE</button>
+          <button data-lang="ms">MALAYSIAN</button>
+          <button data-lang="id">INDONESIA</button>
+          <button data-lang="vi">VIETNAM</button>
+        </div>
+      </div>
+      <div id="userBadge" class="user-badge"></div>
+    </div>
   </nav>
 
   <!-- Sidebar -->
@@ -24,33 +38,22 @@
       </div>
     </div>
 
-    <a href="#" data-nav="home" class="nav-item active">🏠 Home</a>
-    <a href="#" data-nav="watchHistory" class="nav-item">🕒 History Nonton</a>
-    <a href="#" data-nav="searchHistory" class="nav-item">🔎 History Pencarian</a>
-    <a href="#" data-nav="newVideos" class="nav-item">✨ New Videos</a>
+    <a href="#" data-nav="home" class="nav-item active" data-i18n="home">🏠 Home</a>
+    <a href="#" data-nav="watchHistory" class="nav-item" data-i18n="watchHistory">🕒 Watch History</a>
+    <a href="#" data-nav="searchHistory" class="nav-item" data-i18n="searchHistory">🔎 Search History</a>
+    <a href="#" data-nav="newVideos" class="nav-item" data-i18n="newVideos">✨ New Videos</a>
 
     <!-- Admin-only -->
     <button id="adminAddBtn" class="btn w-full mt16 hidden">＋ Add Video (Admin)</button>
 
-    <a href="#" id="logoutBtn" class="nav-item logout">🚪 Logout</a>
+    <a href="#" id="logoutBtn" class="nav-item logout" data-i18n="logout">🚪 Logout</a>
   </aside>
 
   <!-- Content -->
   <main class="container">
     <div class="row gap10">
       <div class="grow search-row">
-        <input id="searchInput" placeholder="Cari judul video..." aria-label="Search videos">
-      </div>
-
-      <div class="lang-switch">
-        <button id="langBtn" class="icon-btn" aria-expanded="false">🌐</button>
-        <div id="langMenu" class="lang-menu" role="menu">
-          <button data-lang="en">ENGLISH</button>
-          <button data-lang="zh">CHINESE</button>
-          <button data-lang="ms">MALAYSIAN</button>
-          <button data-lang="id">INDONESIA</button>
-          <button data-lang="vi">VIETNAM</button>
-        </div>
+        <input id="searchInput" placeholder="Cari judul video..." data-i18n-placeholder="searchPlaceholder" aria-label="Search videos">
       </div>
     </div>
 
