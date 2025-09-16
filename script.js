@@ -1,17 +1,19 @@
 /* ========== CONFIG ========== */
-const ADMIN_EMAIL = 'admin@gmail.com'; // ganti email admin kau
+const ADMIN_EMAIL = 'admin@5g88.local'; // set email admin yang dipakai untuk rules
 /* =========================== */
 
-// helpers
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 const db   = firebase.database();
 const auth = firebase.auth();
+const storage = firebase.storage();
 
 const player = $('#player');
 const videoTitle = $('#videoTitle');
 const listEl = $('#videoList');
 const searchInput = $('#searchInput');
+const searchBtn = $('#searchBtn');
+const noDataEl = $('#noData');
 const historyWrap = $('#historyWrap');
 const watchHistoryEl = $('#watchHistory');
 const searchHistoryEl = $('#searchHistory');
@@ -20,7 +22,7 @@ let videos = [];
 let current = null;
 let dblCount = 0, dblTimer;
 
-/* ======= I18N sederhana ======= */
+/* ===== I18N ===== */
 const I18N = {
   en:{home:'Home',watchHistory:'Watch History',searchHistory:'Search History',newVideos:'New Videos',logout:'Logout',searchPlaceholder:'Search video title…',share:'Share',fullscreen:'Fullscreen'},
   zh:{home:'首页',watchHistory:'观看历史',searchHistory:'搜索历史',newVideos:'新视频',logout:'退出登录',searchPlaceholder:'搜索视频标题…',share:'分享',fullscreen:'全屏'},
@@ -31,93 +33,47 @@ const I18N = {
 function applyLang(lang){
   const dict = I18N[lang] || I18N.en;
   document.querySelectorAll('[data-i18n]').forEach(el=>{
-    const key = el.getAttribute('data-i18n');
-    if (!key || !dict[key]) return;
+    const k = el.getAttribute('data-i18n'); if(!k||!dict[k]) return;
     const emoji = (el.textContent.trim().match(/^[^\w\s]/)?.[0] || '');
-    el.textContent = (emoji ? `${emoji} ` : '') + dict[key];
+    el.textContent = (emoji ? `${emoji} ` : '') + dict[k];
   });
   const si = document.querySelector('[data-i18n-placeholder="searchPlaceholder"]');
   if (si && dict.searchPlaceholder) si.placeholder = dict.searchPlaceholder;
-  const sb = $('#shareBtn'); if (sb) sb.textContent = `🔗 ${dict.share}`;
-  const fb = $('#fsBtn');    if (fb) fb.textContent = `⛶ ${dict.fullscreen}`;
+  $('#shareBtn').textContent = `🔗 ${dict.share}`;
+  $('#fsBtn').textContent = `⛶ ${dict.fullscreen}`;
 }
 const SAVED_LANG = localStorage.getItem('lang') || 'id';
 applyLang(SAVED_LANG);
 
-// UI init
-$('#menuBtn').onclick = () => {
-  $('#sidebar').classList.toggle('open');
-  document.body.classList.toggle('sidebar-open'); // geser konten saat sidebar buka (desktop)
-};
+/* ===== UI INIT ===== */
+$('#menuBtn').onclick = () => { $('#sidebar').classList.toggle('open'); document.body.classList.toggle('sidebar-open'); };
 
 const langWrap = $('#langSwitch');
 $('#langBtn').onclick = () => langWrap.classList.toggle('open');
-$$('#langMenu button').forEach(b=>{
-  b.onclick = ()=>{ localStorage.setItem('lang', b.dataset.lang); applyLang(b.dataset.lang); langWrap.classList.remove('open'); };
-});
+$$('#langMenu button').forEach(b=>{ b.onclick=()=>{ localStorage.setItem('lang', b.dataset.lang); applyLang(b.dataset.lang); langWrap.classList.remove('open'); }; });
 
-// Logout: redirect pakai replace biar tak balik ke index via back
-$('#logoutBtn').addEventListener('click', async (e)=>{
-  e.preventDefault();
-  try { await auth.signOut(); } catch (err) { console.error('signOut error', err); }
-  window.location.replace('login.html');
-});
+$('#logoutBtn').addEventListener('click', async (e)=>{ e.preventDefault(); try { await auth.signOut(); } catch(e){} window.location.replace('login.html'); });
+$('#adminPanelLink').classList.add('hidden'); // default hidden, akan shown jika admin
 
-$('#adminAddBtn').onclick = () => $('#addModal').showModal();
-$('#m_save').onclick = async (e) => {
-  e.preventDefault();
-  const title = $('#m_title').value.trim();
-  const src   = $('#m_src').value.trim();
-  const intro = $('#m_intro').value.trim();
-  if(!title || !src) return;
+// Search: klik icon atau Enter
+function doSearch(){
+  const q = searchInput.value.trim().toLowerCase();
+  renderList(q);
+  if(q) saveSearchHistory(q);
+}
+searchBtn.onclick = doSearch;
+searchInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); doSearch(); }});
+searchInput.oninput = () => { if(!searchInput.value) renderList(''); };
 
-  const id = db.ref('videos').push().key;
-  await db.ref(`videos/${id}`).set({ id, title, src, intro: intro || null, createdAt: Date.now() });
-  $('#addModal').close();
-  $('#m_title').value = $('#m_src').value = $('#m_intro').value = '';
-};
-
-$$('.nav-item').forEach(a=>{
-  a.onclick = (e)=>{
-    e.preventDefault();
-    $$('.nav-item').forEach(x=>x.classList.remove('active'));
-    a.classList.add('active');
-    const key = a.dataset.nav;
-    if (key === 'home' || key === 'newVideos') {
-      historyWrap.classList.add('hidden');
-      $('.container section:nth-of-type(2)').classList.remove('hidden');
-    } else if (key === 'watchHistory' || key === 'searchHistory') {
-      historyWrap.classList.remove('hidden');
-      $('.container section:nth-of-type(2)').classList.add('hidden');
-      renderHistories();
-    }
-  };
-});
-
-// skip buttons
+// Controls
 $$('.controls .btn').forEach(b=>{
   b.onclick = () => {
     const s = parseInt(b.dataset.skip,10)||0;
     player.currentTime = Math.max(0, Math.min(player.duration || 0, player.currentTime + s));
   };
 });
-
-// double-click progressive skip 10s, 20s, 30s, ...
-player.addEventListener('dblclick', ()=>{
-  dblCount++;
-  const sec = 10 * dblCount;
-  player.currentTime = Math.max(0, Math.min(player.duration || 0, player.currentTime + sec));
-  clearTimeout(dblTimer);
-  dblTimer = setTimeout(()=>{ dblCount = 0; }, 600);
-});
-
-// fullscreen
-$('#fsBtn').onclick = ()=>{
-  if (!document.fullscreenElement) player.requestFullscreen?.();
-  else document.exitFullscreen?.();
-};
-
-// like / dislike (store per video per user in DB)
+player.addEventListener('dblclick', ()=>{ dblCount++; const sec=10*dblCount; player.currentTime=Math.max(0,Math.min(player.duration||0,player.currentTime+sec)); clearTimeout(dblTimer); dblTimer=setTimeout(()=>{dblCount=0;},600); });
+$('#fsBtn').onclick = ()=>{ if(!document.fullscreenElement) player.requestFullscreen?.(); else document.exitFullscreen?.(); };
 $('#likeBtn').onclick = ()=> setReaction('like');
 $('#dislikeBtn').onclick = ()=> setReaction('dislike');
 
@@ -128,86 +84,123 @@ async function setReaction(kind){
   updateReactionsUI(current.id);
 }
 
-// share
 $('#shareBtn').onclick = async ()=>{
   const url = location.origin + location.pathname + `?v=${encodeURIComponent(current?.id || '')}`;
+  try{ await navigator.share?.({ title: current?.title || 'Video', url }); }
+  catch(e){ await navigator.clipboard.writeText(url); alert('Link copied'); }
+};
+
+// Upload helpers
+function uploadFileTo(path, file, onProgress){
+  return new Promise((resolve,reject)=>{
+    const ref = storage.ref().child(path);
+    const task = ref.put(file);
+    task.on('state_changed', s=>{
+      onProgress?.(Math.round(100*s.bytesTransferred/s.totalBytes));
+    }, reject, async ()=> resolve(await ref.getDownloadURL()));
+  });
+}
+$('#adminAddBtn').onclick = () => $('#addModal').showModal();
+$('#m_save').onclick = async (e)=>{
+  e.preventDefault();
+  const title = $('#m_title').value.trim();
+  const urlMain   = $('#m_src').value.trim();
+  const urlIntro  = $('#m_intro').value.trim();
+  const fileMain  = $('#m_file')?.files?.[0] || null;
+  const fileIntro = $('#m_file_intro')?.files?.[0] || null;
+  const prog = $('#m_prog');
+  if(!title) return alert('Judul wajib diisi');
+  if(!urlMain && !fileMain) return alert('Isi URL video atau upload file');
+
   try{
-    await navigator.share?.({ title: current?.title || 'Video', url });
-  }catch(e){
-    await navigator.clipboard.writeText(url);
-    alert('Link copied');
-  }
+    prog.style.display='block'; prog.value=0;
+    const key = db.ref('videos').push().key;
+    let finalMain = urlMain, finalIntro = urlIntro;
+
+    if(fileMain)  finalMain  = await uploadFileTo(`videos/${key}/main_${Date.now()}_${fileMain.name}`, fileMain, p=>prog.value=p);
+    if(fileIntro) finalIntro = await uploadFileTo(`videos/${key}/intro_${Date.now()}_${fileIntro.name}`, fileIntro, p=>prog.value=p);
+
+    await db.ref(`videos/${key}`).set({ id:key, title, src:finalMain, intro:finalIntro||null, createdAt:Date.now() });
+
+    prog.style.display='none';
+    $('#addModal').close();
+    $('#m_title').value = $('#m_src').value = $('#m_intro').value = '';
+    if($('#m_file')) $('#m_file').value = '';
+    if($('#m_file_intro')) $('#m_file_intro').value = '';
+  }catch(err){ console.error(err); alert('Gagal upload/simpan video. Lihat console.'); prog.style.display='none'; }
 };
 
-// search
-searchInput.oninput = e => {
-  const q = e.target.value.trim().toLowerCase();
-  renderList(q);
-  if(q) saveSearchHistory(q);
-};
+// History save
+player.addEventListener('ended', ()=>{ if(current) saveWatchHistory(current); });
 
-// watch history when ended
-player.addEventListener('ended', ()=> {
-  if(current) saveWatchHistory(current);
-});
-
-// load auth state
+/* ===== AUTH STATE ===== */
 auth.onAuthStateChanged(async (u)=>{
-  if(!u){ location.href = 'login.html'; return; }
+  if(!u){ location.href='login.html'; return; }
 
-  // badge
   $('#userBadge').textContent = u.displayName || u.email || 'User';
   $('#username').textContent = `(profile) ${u.displayName || u.email}`;
   $('#userEmail').textContent = u.email || '';
   if (u.photoURL) $('#avatar').style.backgroundImage = `url(${u.photoURL})`;
 
-  // admin button
-  if (u.email === ADMIN_EMAIL) $('#adminAddBtn').classList.remove('hidden');
+  // simpan profil user (untuk admin page)
+  const prv = u.providerData?.[0] || {};
+  await db.ref('users/'+u.uid).update({
+    uid: u.uid, email: u.email || null, displayName: u.displayName || null,
+    photoURL: u.photoURL || null, providerId: prv.providerId || null, providerUID: prv.uid || null,
+    lastLoginAt: Date.now()
+  });
 
-  console.log('[app] auth ok, load videos…');
+  if (u.email === ADMIN_EMAIL) { $('#adminAddBtn').classList.remove('hidden'); $('#adminPanelLink').classList.remove('hidden'); }
 
-  // load videos from Firebase, fallback to json
-  db.ref('videos').on('value', async snap => {
+  // Load videos → fallback JSON
+  db.ref('videos').on('value', async snap=>{
     try{
       const val = snap.val();
       if (val) {
         videos = Object.values(val).sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-        console.log('[videos] RTDB:', videos.length);
         renderList('');
         if (!current && videos[0]) loadVideo(videos[0]);
       } else {
-        console.warn('[videos] RTDB empty, fallback JSON');
         await loadFromJson();
       }
-    }catch(err){
-      console.error('[videos] RTDB handler error', err);
-      await loadFromJson();
-    }
+    }catch(e){ console.error(e); await loadFromJson(); }
   });
 
-  // pick by URL ?v=id
-  const params = new URLSearchParams(location.search);
-  const vidParam = params.get('v');
-  if (vidParam) window.__pendingVidId = vidParam;
+  // click profile → My Account
+  $('#profileCard').onclick = ()=>{
+    const html = `
+      <li><b>UID</b>: ${u.uid}</li>
+      <li><b>Email</b>: ${u.email || '-'}</li>
+      <li><b>Display Name</b>: ${u.displayName || '-'}</li>
+      <li><b>Provider</b>: ${(prv.providerId || '-')}</li>
+      <li><b>Provider UID</b>: ${(prv.uid || '-')}</li>
+      <li><b>Photo</b>: ${u.photoURL ? `<a href="${u.photoURL}" target="_blank">Open</a>` : '-'}</li>
+      <li><b>Login Time</b>: ${new Date().toLocaleString()}</li>`;
+    $('#accInfo').innerHTML = html;
+    $('#accModal').showModal();
+  };
+
+  // URL ?v=… deep link
+  const idParam = new URLSearchParams(location.search).get('v');
+  if (idParam) window.__pendingVidId = idParam;
 });
 
 async function loadFromJson(){
-  try{
-    const seed = await fetch('video-data.json', {cache:'no-store'}).then(r=>r.json());
-    videos = seed.map((v,i)=> ({ id: `seed-${i}`, title:v.title, src:v.src, intro:v.intro||null, createdAt:Date.now()-i*1000 }));
-    console.log('[videos] JSON:', videos.length);
-    renderList('');
-    if (!current && videos[0]) loadVideo(videos[0]);
-  }catch(e){
-    console.error('[videos] loadFromJson failed', e);
-    alert('Gagal memuat daftar video. Periksa video-data.json & console.');
-  }
+  const seed = await fetch('video-data.json', {cache:'no-store'}).then(r=>r.json()).catch(()=>[]);
+  videos = seed.map((v,i)=>({id:`seed-${i}`, title:v.title, src:v.src, intro:v.intro||null, createdAt:Date.now()-i*1000}));
+  renderList('');
+  if(!current && videos[0]) loadVideo(videos[0]);
 }
 
-// render list
+/* ===== LIST / SEARCH / NO DATA ===== */
 function renderList(filter=''){
   listEl.innerHTML = '';
-  const data = videos.filter(v => v.title.toLowerCase().includes(filter.toLowerCase()));
+  const data = videos.filter(v=> v.title.toLowerCase().includes(filter.toLowerCase()));
+  if (data.length === 0) {
+    noDataEl.classList.remove('hidden');
+  } else {
+    noDataEl.classList.add('hidden');
+  }
   data.forEach(v=>{
     const li = document.createElement('li');
     const btn = document.createElement('button');
@@ -224,31 +217,21 @@ function renderList(filter=''){
   }
 }
 
-// load video with optional 30s intro
 function loadVideo(v){
   current = v;
   videoTitle.textContent = v.title;
-  console.log('[player] load', v);
-
   if (v.intro) {
     player.src = v.intro;
-    player.play().catch(err=>console.warn('[player] intro play err:', err));
-    const onEnded = ()=>{
-      player.removeEventListener('ended', onEnded);
-      player.src = v.src; player.play().catch(err=>console.warn('[player] main play err:', err));
-    };
-    const guard = setInterval(()=>{
-      if (player.currentTime >= 30) { clearInterval(guard); onEnded(); }
-    }, 400);
+    player.play().catch(()=>{});
+    const onEnded = ()=>{ player.removeEventListener('ended', onEnded); player.src = v.src; player.play().catch(()=>{}); };
+    const guard = setInterval(()=>{ if(player.currentTime>=30){ clearInterval(guard); onEnded(); } }, 400);
     player.addEventListener('ended', onEnded);
   } else {
-    player.src = v.src;
-    player.play().catch(err=>console.warn('[player] play err:', err));
+    player.src = v.src; player.play().catch(()=>{});
   }
   updateReactionsUI(v.id);
 }
 
-// update like/dislike counts
 async function updateReactionsUI(id){
   const snap = await db.ref(`reactions/${id}`).get();
   const val = snap.val() || {};
@@ -260,7 +243,6 @@ async function updateReactionsUI(id){
 /* ===== Histories (localStorage) ===== */
 const LS_WATCH = 'video.watch.v1';
 const LS_SEARCH = 'video.search.v1';
-
 function saveWatchHistory(v){
   const arr = JSON.parse(localStorage.getItem(LS_WATCH)||'[]');
   arr.unshift({ id:v.id, title:v.title, t:Date.now() });
@@ -275,6 +257,26 @@ function saveSearchHistory(q){
 function renderHistories(){
   const w = JSON.parse(localStorage.getItem(LS_WATCH)||'[]');
   const s = JSON.parse(localStorage.getItem(LS_SEARCH)||'[]');
-  watchHistoryEl.innerHTML = w.map(i=>`<li>${new Date(i.t).toLocaleString()} — ${i.title}</li>`).join('') || '<li>Belum ada.</li>';
-  searchHistoryEl.innerHTML = s.map(i=>`<li>${new Date(i.t).toLocaleString()} — ${i.q}</li>`).join('') || '<li>Belum ada.</li>';
+
+  // watch history → klik membuka video
+  watchHistoryEl.innerHTML = (w.length? '' : '<li>No data</li>') + w.map(i=>{
+    const url = `index.html?v=${encodeURIComponent(i.id)}`;
+    return `<li><a href="${url}" class="hist-link" data-id="${i.id}">${new Date(i.t).toLocaleString()} — ${i.title}</a></li>`;
+  }).join('');
+
+  // search history (hanya tampilan)
+  searchHistoryEl.innerHTML = (s.length? '' : '<li>No data</li>') + s.map(i=>{
+    return `<li>${new Date(i.t).toLocaleString()} — ${i.q}</li>`;
+  }).join('');
+
+  // jika sedang di index, intercept klik agar tidak reload
+  watchHistoryEl.querySelectorAll('.hist-link').forEach(a=>{
+    a.onclick = (e)=>{
+      e.preventDefault();
+      const id = a.dataset.id;
+      const v = videos.find(x=>x.id===id);
+      if (v) loadVideo(v);
+      else location.href = a.getAttribute('href'); // fallback
+    };
+  });
 }
