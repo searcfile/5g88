@@ -1,1 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Login • 5G88 Video</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <h1>5G88 <span>Video</span></h1>
+    <p>Login untuk menonton video.</p>
 
+    <button id="loginGoogle" class="btn wide google">Login dengan Google</button>
+    <button id="loginFacebook" class="btn wide facebook">Login dengan Facebook</button>
+
+    <small class="muted">Anda akan diarahkan ke halaman utama setelah login.</small>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="firebase.js"></script>
+  <script>
+    const auth = firebase.auth();
+
+    // Jika sudah login → ke index
+    auth.onAuthStateChanged(u => { if (u) location.href = 'index.html'; });
+
+    document.getElementById('loginGoogle').onclick = async () => {
+      const prov = new firebase.auth.GoogleAuthProvider();
+      await auth.signInWithPopup(prov);
+      location.href = 'index.html';
+    };
+
+    document.getElementById('loginFacebook').onclick = async () => {
+      const prov = new firebase.auth.FacebookAuthProvider();
+      // Pastikan Facebook auth di-enable & OAuth redirect URL sudah diset di Facebook App
+      await auth.signInWithPopup(prov);
+      location.href = 'index.html';
+    };
+  </script>
+</body>
+</html>
