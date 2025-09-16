@@ -6,4 +6,10 @@ const firebaseConfig = {
   messagingSenderId: "525374326586",
   appId: "1:525374326586:web:e2578b79fad3e29df2f203"
 };
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+// Inisialisasi sekali saja
+if (!firebase.apps || !firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+} else {
+  firebase.app(); // gunakan instance yang sudah ada
+}
