@@ -17,5 +17,4 @@ if (!firebase.apps || !firebase.apps.length) {
 } else {
   firebase.app();
 }
-
 console.log('Firebase apps length =', firebase.apps.length);
